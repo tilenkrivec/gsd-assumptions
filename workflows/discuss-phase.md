@@ -195,7 +195,7 @@ DISCUSS_MODE=$(node /Users/tilenkrivec/.claude/get-shit-done/bin/gsd-tools.cjs c
 <step name="deep_codebase_analysis">
 **This step is the core difference from the default discuss flow.**
 
-Before surfacing any assumptions, thoroughly analyze the codebase to understand existing patterns, conventions, and architecture relevant to this phase.
+Before surfacing any assumptions, thoroughly analyze the codebase. **This runs as a subagent to protect the main context window from file contents.**
 
 Display:
 ```
@@ -203,40 +203,99 @@ Display:
  GSD ► ANALYZING CODEBASE FOR PHASE {X}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Reading existing patterns, components, and architecture...
+◆ Spawning codebase analyzer...
 ```
 
-**1. Read the phase description from ROADMAP.md** — understand what capability is being delivered.
+### Read phase context first (main context — small reads)
 
-**2. Read REQUIREMENTS.md** — understand the specific requirements mapped to this phase.
+Read the phase description from ROADMAP.md and the specific requirements from REQUIREMENTS.md. These are small and needed to construct the subagent prompt.
 
-**3. Identify related areas of the codebase** using Glob and Grep:
-   - Find files related to the phase domain (components, routes, APIs, utilities)
-   - Find similar features already built (how does the app handle comparable things?)
-   - Find adjacent code this phase will connect to (what it imports from, what imports from it)
-   - Find configuration patterns (how are similar things configured?)
-   - Find UI patterns (if UI-related: what component libraries, layouts, styles are used?)
+### Spawn Explore subagent for deep analysis
 
-**4. Read the most relevant files** (aim for 5-15 files depending on complexity):
+```
+Task(
+  prompt="Analyze the codebase for Phase {phase_number}: {phase_name}.
+
+<objective>
+Find existing patterns, conventions, components, and architecture relevant to this phase.
+Return a structured summary — NOT raw file contents.
+</objective>
+
+<phase_context>
+**Phase goal:** {goal from ROADMAP.md}
+**Phase description:** {section from ROADMAP.md}
+**Requirements:** {relevant requirements from REQUIREMENTS.md}
+</phase_context>
+
+<analysis_steps>
+1. **Identify related areas** using Glob and Grep:
+   - Files related to the phase domain (components, routes, APIs, utilities)
+   - Similar features already built (how does the app handle comparable things?)
+   - Adjacent code this phase will connect to (imports, consumers)
+   - Configuration patterns (how are similar things configured?)
+   - UI patterns (if UI-related: component libraries, layouts, styles)
+
+2. **Read the most relevant files** (aim for 5-15 depending on complexity):
    - Existing components in the same domain
    - Route structure and layout patterns
    - GraphQL queries/mutations for related data
    - Type definitions and interfaces
    - Any prior phase outputs that feed into this phase
 
-**5. Synthesize findings internally:**
-   - What patterns does this codebase follow?
-   - What conventions are established?
-   - What already exists that this phase should build on?
-   - What genuinely has no precedent and could go multiple ways?
+3. **Synthesize findings** — organize into this exact output format:
+</analysis_steps>
 
-**Key principle:** Spend time reading code NOW so you don't waste the user's time asking questions the codebase already answers.
+<required_output_format>
+Return your analysis in this EXACT structure:
 
-Continue to surface_assumptions.
+## Codebase Patterns Found
+- [Pattern/convention] — found in [file path(s)]
+- [Pattern/convention] — found in [file path(s)]
+(list all relevant patterns discovered)
+
+## Assumptions by Area
+
+### [Area 1 — name it based on what you found, e.g. 'Data Model', 'UI Layout', 'API Integration']
+- [Confident/Likely/Unclear]: [What I'd do] — because [evidence from codebase]
+
+### [Area 2]
+- [Confident/Likely/Unclear]: [What I'd do] — because [evidence from codebase]
+
+### [Area 3]
+- [Confident/Likely/Unclear]: [What I'd do] — because [evidence from codebase]
+
+### Scope Boundaries
+- In scope: [capabilities from phase goal]
+- Out of scope: [what this phase doesn't cover]
+- Ambiguous: [things that could go either way]
+
+## Genuinely Unclear Items
+(List ONLY items where the codebase has no clear precedent and the user should weigh in.
+The fewer items here, the better — that means you read thoroughly.)
+</required_output_format>
+
+<quality_bar>
+- Cite specific file paths, not vague references
+- Mark confidence levels honestly: Confident (clear precedent), Likely (reasonable inference), Unclear (multiple valid approaches exist)
+- Minimize 'Unclear' items by reading thoroughly — the whole point is to avoid asking the user questions the code already answers
+- Group by phase-relevant areas, NOT generic categories like 'UI' or 'Backend'
+</quality_bar>",
+  subagent_type="Explore",
+  description="Analyze codebase for Phase {phase}"
+)
+```
+
+### Handle Explore subagent return
+
+Store the returned analysis as `CODEBASE_ANALYSIS`. This is a structured summary — no raw file contents in main context.
+
+Display: `◆ Codebase analysis complete.`
+
+Continue to surface_assumptions, passing `CODEBASE_ANALYSIS`.
 </step>
 
 <step name="surface_assumptions">
-Present findings and assumptions to the user in a scannable format.
+Present the subagent's analysis (`CODEBASE_ANALYSIS`) to the user in a scannable format. Do NOT re-read files — the analysis is already done.
 
 Display:
 
@@ -248,42 +307,13 @@ Display:
 Phase boundary: [What this phase delivers — from ROADMAP.md]
 ```
 
-**Group assumptions into categories relevant to this phase:**
+**Present the CODEBASE_ANALYSIS directly to the user.** The Explore subagent already structured it with:
+- Codebase patterns found (with file citations)
+- Assumptions grouped by phase-relevant areas (with confidence levels)
+- Scope boundaries
+- Genuinely unclear items
 
-### What I Found in the Codebase
-- [Pattern/convention observed] — found in [file(s)]
-- [Existing component/approach that applies] — found in [file(s)]
-- [Architecture decision already established] — found in [file(s)]
-
-### My Assumptions (Based on Codebase Analysis)
-
-For each assumption, state:
-- **What** you'd do
-- **Why** (citing codebase evidence)
-- **Confidence**: `Confident` (clear precedent), `Likely` (reasonable inference), `Unclear` (could go multiple ways)
-
-Group by phase-relevant areas (NOT generic categories). Examples:
-
-```
-### Data Model & Storage
-- Confident: I'd add a `xyz` table following the existing pattern in [file] with UUID PKs and cascade deletes
-- Likely: I'd store config as JSONB like ad_batches.template_config
-
-### UI & Layout
-- Confident: I'd use the existing card layout pattern from [component]
-- Unclear: The detail view could be a modal (like template selector) or a full page (like angle detail) — both patterns exist
-
-### API & Integration
-- Confident: I'd follow the existing /api/ route pattern with admin secret auth
-- Likely: I'd use the same S3 upload utility from lib/storage/
-
-### Scope Boundaries
-- In scope: [capabilities from roadmap]
-- Out of scope: [what this phase explicitly doesn't cover]
-- Ambiguous: [things that could reasonably be in or out]
-```
-
-**Only flag items as "Unclear" when the codebase genuinely has no clear precedent.** The whole point is to minimize these by reading thoroughly first.
+**Only flag items as "Unclear" when the codebase genuinely has no clear precedent.** The whole point of the subagent analysis is to minimize these.
 
 Continue to gather_corrections.
 </step>
