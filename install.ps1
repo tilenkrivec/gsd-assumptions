@@ -33,6 +33,7 @@ if (-not (Test-Path $BackupDir)) {
     New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
     Copy-Item "$GsdDir\workflows\discuss-phase.md" "$BackupDir\discuss-phase.md" -ErrorAction SilentlyContinue
     Copy-Item "$GsdDir\workflows\plan-phase.md" "$BackupDir\plan-phase.md" -ErrorAction SilentlyContinue
+    Copy-Item "$GsdDir\workflows\progress.md" "$BackupDir\progress.md" -ErrorAction SilentlyContinue
     Write-Host "Originals backed up."
 } else {
     Write-Host "Backup already exists, skipping."
@@ -61,6 +62,11 @@ function Install-File {
 
 Install-File -Source "$ScriptDir\workflows\discuss-phase.md" -Destination "$GsdDir\workflows\discuss-phase.md" -Name "workflows/discuss-phase.md"
 Install-File -Source "$ScriptDir\workflows\plan-phase.md" -Destination "$GsdDir\workflows\plan-phase.md" -Name "workflows/plan-phase.md"
+Install-File -Source "$ScriptDir\workflows\progress.md" -Destination "$GsdDir\workflows\progress.md" -Name "workflows/progress.md"
+
+$CmdDir = Join-Path $env:USERPROFILE ".claude\commands\gsd"
+if (-not (Test-Path $CmdDir)) { New-Item -ItemType Directory -Path $CmdDir -Force | Out-Null }
+Install-File -Source "$ScriptDir\commands\gsd\discuss-phase.md" -Destination "$CmdDir\discuss-phase.md" -Name "commands/gsd/discuss-phase.md"
 
 Write-Host ""
 Write-Host "Done. Customizations installed." -ForegroundColor Green

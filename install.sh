@@ -103,6 +103,8 @@ install_file() {
 
 install_file "$SCRIPT_DIR/workflows/discuss-phase.md" "$GSD_DIR/workflows/discuss-phase.md" "workflows/discuss-phase.md"
 install_file "$SCRIPT_DIR/workflows/plan-phase.md" "$GSD_DIR/workflows/plan-phase.md" "workflows/plan-phase.md"
+install_file "$SCRIPT_DIR/workflows/progress.md" "$GSD_DIR/workflows/progress.md" "workflows/progress.md"
+install_file "$SCRIPT_DIR/commands/gsd/discuss-phase.md" "$HOME/.claude/commands/gsd/discuss-phase.md" "commands/gsd/discuss-phase.md"
 
 echo ""
 echo "Done. Customizations installed."
