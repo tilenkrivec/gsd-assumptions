@@ -1,12 +1,14 @@
 #!/bin/bash
 # GSD Customizations Installer
 # Copies modified workflow files into the GSD installation directory.
+# Replaces placeholder paths with the current user's home directory.
 # Run after each GSD update to reapply your modifications.
 
 set -e
 
 GSD_DIR="$HOME/.claude/get-shit-done"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TEMPLATE_HOME="/Users/tilenkrivec"
 
 # Verify GSD is installed
 if [ ! -d "$GSD_DIR" ]; then
@@ -33,14 +35,26 @@ fi
 
 echo ""
 
-# Copy modified files
+# Copy modified files with path replacement
 echo "Installing customizations..."
 
-cp "$SCRIPT_DIR/workflows/discuss-phase.md" "$GSD_DIR/workflows/discuss-phase.md"
-echo "  ✓ workflows/discuss-phase.md"
+install_file() {
+  local src="$1"
+  local dst="$2"
+  local name="$3"
 
-cp "$SCRIPT_DIR/workflows/plan-phase.md" "$GSD_DIR/workflows/plan-phase.md"
-echo "  ✓ workflows/plan-phase.md"
+  if [ "$HOME" != "$TEMPLATE_HOME" ]; then
+    # Replace template paths with current user's home directory
+    sed "s|$TEMPLATE_HOME|$HOME|g" "$src" > "$dst"
+    echo "  ✓ $name (paths updated for $HOME)"
+  else
+    cp "$src" "$dst"
+    echo "  ✓ $name"
+  fi
+}
+
+install_file "$SCRIPT_DIR/workflows/discuss-phase.md" "$GSD_DIR/workflows/discuss-phase.md" "workflows/discuss-phase.md"
+install_file "$SCRIPT_DIR/workflows/plan-phase.md" "$GSD_DIR/workflows/plan-phase.md" "workflows/plan-phase.md"
 
 echo ""
 echo "Done. Customizations installed."
