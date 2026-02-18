@@ -256,13 +256,19 @@ Return your analysis in this EXACT structure:
 ## Assumptions by Area
 
 ### [Area 1 — name it based on what you found, e.g. 'Data Model', 'UI Layout', 'API Integration']
-- [Confident/Likely/Unclear]: [What I'd do] — because [evidence from codebase]
+- **Assumption:** [Concrete decision statement — written as a decision, not a question]
+- **Confidence:** [Confident/Likely/Unclear]
+- **Evidence:** [file path(s) and what they show]
 
 ### [Area 2]
-- [Confident/Likely/Unclear]: [What I'd do] — because [evidence from codebase]
+- **Assumption:** [Concrete decision statement]
+- **Confidence:** [Confident/Likely/Unclear]
+- **Evidence:** [file path(s) and what they show]
 
 ### [Area 3]
-- [Confident/Likely/Unclear]: [What I'd do] — because [evidence from codebase]
+- **Assumption:** [Concrete decision statement]
+- **Confidence:** [Confident/Likely/Unclear]
+- **Evidence:** [file path(s) and what they show]
 
 ### Scope Boundaries
 - In scope: [capabilities from phase goal]
@@ -271,7 +277,11 @@ Return your analysis in this EXACT structure:
 
 ## Genuinely Unclear Items
 (List ONLY items where the codebase has no clear precedent and the user should weigh in.
-The fewer items here, the better — that means you read thoroughly.)
+The fewer items here, the better — that means you read thoroughly.
+For each item, use this format:)
+- **[Topic]:** [Why it's unclear — what's missing from the codebase]
+  - Leaning toward: [your recommended approach] — because [reasoning]
+  - Alternative: [other valid approach] — [when you'd pick this instead]
 </required_output_format>
 
 <quality_bar>
@@ -324,10 +334,10 @@ After presenting assumptions, ask the user for corrections.
 Use AskUserQuestion (multiSelect: true):
 - header: "Corrections"
 - question: "Which assumptions need correction? Select any that are wrong or missing context."
-- options: Generate 3-4 options based on the assumption groups that had `Likely` or `Unclear` items:
-  - "[Area 1]" — Brief description of what's uncertain
-  - "[Area 2]" — Brief description of what's uncertain
-  - "[Area 3]" — Brief description of what's uncertain
+- options: Generate 3-4 options based on the assumption groups that had `Likely` or `Unclear` items. Each option MUST state the actual assumption, not just the area name:
+  - "[Area]: [what Claude assumed]" — e.g. "Data Model: extend existing PostType with new fields"
+  - "[Area]: [what Claude assumed]" — e.g. "Navigation: add tab to existing bottom nav bar"
+  - "[Area]: [what Claude assumed]" — e.g. "State: use existing Redux store pattern"
   - "All good" — Assumptions are accurate, proceed to write context
 
 **If user selects "All good":**
@@ -337,8 +347,9 @@ Continue to write_context.
 **If user selects areas to correct:**
 For each selected area, ask ONE focused AskUserQuestion:
 - header: "[Area]" (max 12 chars)
-- question: Specific question about what's wrong with the assumption
-- options: 2-3 concrete alternatives based on what you found + "Other"
+- question: State what Claude assumed, then ask what's right. Format: "I assumed [X]. What should it be instead?"
+- options: 2-3 concrete alternatives. Mark your recommended option with "(Recommended)" suffix. AskUserQuestion adds "Other" automatically.
+  Example: ["Use existing UserProfile table", "New dedicated table (Recommended)", "External service / API"]
 
 After all corrections gathered, summarize:
 ```
