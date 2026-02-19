@@ -53,10 +53,10 @@ function Install-File {
     if ($CurrentHome -ne $TemplateHome) {
         $content = $content -replace [regex]::Escape($TemplateHome), $CurrentHome
         Set-Content -Path $Destination -Value $content -NoNewline
-        Write-Host "  ✓ $Name (paths updated: $TemplateHome → $CurrentHome)"
+        Write-Host "  [OK] $Name (paths updated: $TemplateHome -> $CurrentHome)"
     } else {
         Copy-Item $Source $Destination
-        Write-Host "  ✓ $Name"
+        Write-Host "  [OK] $Name"
     }
 }
 
@@ -71,5 +71,5 @@ Install-File -Source "$ScriptDir\commands\gsd\discuss-phase.md" -Destination "$C
 Write-Host ""
 Write-Host "Done. Customizations installed." -ForegroundColor Green
 Write-Host ""
-Write-Host 'Remember to add this to your project .planning/config.json:'
-Write-Host '  "workflow": { "discuss_mode": "assumptions" }'
+Write-Host "Remember to add this to your project .planning/config.json:"
+Write-Host "  `"workflow`": { `"discuss_mode`": `"assumptions`" }"
