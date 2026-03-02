@@ -43,7 +43,7 @@ The user doesn't know (and shouldn't be asked):
 - Success metrics (inferred from the work)
 
 **In discuss mode:** Ask about vision and implementation choices.
-**In assumptions mode:** Present what you learned from the codebase, let user correct.
+**In assumptions mode:** Present what you learned from the codebase WITH enough context for the user to evaluate it. The user didn't write the code — they don't know what tables exist, what components were built, or why one approach fits better than another. Every assumption must carry its own context: what exists, why you chose this path, and what changes if you're wrong.
 
 Both modes capture decisions for downstream agents.
 </philosophy>
@@ -257,16 +257,22 @@ Return your analysis in this EXACT structure:
 
 ### [Area 1 — name it based on what you found, e.g. 'Data Model', 'UI Layout', 'API Integration']
 - **Assumption:** [Concrete decision statement — written as a decision, not a question]
+- **Why this way:** [Plain-language explanation of why this over alternatives. Reference specific codebase evidence. The user may not have created this code — explain WHAT exists and WHY it points to this choice. e.g. "The app already stores user data in `user_profiles` (created during auth setup). Extending it keeps queries simple vs. creating a separate table that would need joins."]
+- **If wrong:** [What concretely changes if the user corrects this. Not vague — specific consequences. e.g. "We'd create a new `user_preferences` table with a foreign key to users, and update the settings page queries to read from there instead."]
 - **Confidence:** [Confident/Likely/Unclear]
 - **Evidence:** [file path(s) and what they show]
 
 ### [Area 2]
 - **Assumption:** [Concrete decision statement]
+- **Why this way:** [Plain-language explanation referencing codebase evidence]
+- **If wrong:** [What concretely changes]
 - **Confidence:** [Confident/Likely/Unclear]
 - **Evidence:** [file path(s) and what they show]
 
 ### [Area 3]
 - **Assumption:** [Concrete decision statement]
+- **Why this way:** [Plain-language explanation referencing codebase evidence]
+- **If wrong:** [What concretely changes]
 - **Confidence:** [Confident/Likely/Unclear]
 - **Evidence:** [file path(s) and what they show]
 
@@ -276,12 +282,13 @@ Return your analysis in this EXACT structure:
 - Ambiguous: [things that could go either way]
 
 ## Genuinely Unclear Items
-(List ONLY items where the codebase has no clear precedent and the user should weigh in.
+(List ONLY items where the codebase has no clear precedent and the user MUST weigh in.
 The fewer items here, the better — that means you read thoroughly.
 For each item, use this format:)
-- **[Topic]:** [Why it's unclear — what's missing from the codebase]
-  - Leaning toward: [your recommended approach] — because [reasoning]
-  - Alternative: [other valid approach] — [when you'd pick this instead]
+- **[Topic]:** [Why there's no clear answer — what you looked for and didn't find. Be specific: "No existing pattern for X" not "unclear"]
+  - What the user will notice: [Plain-language description of how each option affects the end result — the visible/behavioral difference, not the technical mechanism]
+  - Leaning toward: [your recommended approach] — because [reasoning in plain language]
+  - Alternative: [other valid approach] — [when you'd pick this instead, described in terms of user-facing outcome]
 </required_output_format>
 
 <quality_bar>
@@ -289,6 +296,11 @@ For each item, use this format:)
 - Mark confidence levels honestly: Confident (clear precedent), Likely (reasonable inference), Unclear (multiple valid approaches exist)
 - Minimize 'Unclear' items by reading thoroughly — the whole point is to avoid asking the user questions the code already answers
 - Group by phase-relevant areas, NOT generic categories like 'UI' or 'Backend'
+- CRITICAL — Every assumption MUST have 'Why this way' and 'If wrong':
+  - 'Why this way' must be understandable by someone who didn't write the code. Don't say "use TableX instead of TableY" — explain what TableX IS, when it was created, what it contains, and why it fits better.
+  - 'If wrong' must describe concrete implementation changes, not vague "it would be different." What files change? What gets created/modified? What behavior shifts?
+  - The user is a visionary, not a codebase archaeologist. They need enough context to evaluate whether your assumption matches their intent.
+- Avoid jargon-heavy assumptions. "Extend the Prisma schema with a new relation" means nothing — say "Add a 'favorites' list to each user's data, connected to existing posts."
 </quality_bar>",
   subagent_type="Explore",
   description="Analyze codebase for Phase {phase}"
@@ -317,11 +329,35 @@ Display:
 Phase boundary: [What this phase delivers — from ROADMAP.md]
 ```
 
-**Present the CODEBASE_ANALYSIS directly to the user.** The Explore subagent already structured it with:
-- Codebase patterns found (with file citations)
-- Assumptions grouped by phase-relevant areas (with confidence levels)
-- Scope boundaries
-- Genuinely unclear items
+**Present the CODEBASE_ANALYSIS to the user, but reformat for scannability:**
+
+1. **Skip "Codebase Patterns Found"** — don't dump raw pattern lists. The patterns are already woven into each assumption's "Why this way" field.
+
+2. **For each assumption area, present as a clear block:**
+   ```
+   ### [Area Name]
+
+   **I'll:** [assumption in plain language]
+   **Because:** [why — referencing what exists in the codebase, explained for someone who didn't write it]
+   **If that's wrong:** [what changes — concrete consequences]
+   **Confidence:** [level]
+   ```
+
+3. **For "Genuinely Unclear" items**, present as open questions with your recommendation:
+   ```
+   ### Needs Your Input
+
+   **[Topic]:** [Why there's no clear answer from the codebase]
+   → I'd go with: [recommendation] because [reasoning]
+   → Alternative: [other approach] — [when you'd pick this instead]
+   ```
+
+4. **Keep Scope Boundaries brief** — one line each for in/out/ambiguous.
+
+**Presentation principles:**
+- Write for someone who hasn't looked at the code in weeks (or ever). Don't assume they remember what tables, components, or patterns exist.
+- Lead with the USER-VISIBLE consequence, not the technical mechanism. "Posts will appear in a scrollable list like the existing feed" not "Reuse the FlatList component from PostFeed.tsx".
+- When referencing something Claude built in a previous phase, say so: "The auth system (built in Phase 2) already stores..." — this explains WHY something exists.
 
 **Only flag items as "Unclear" when the codebase genuinely has no clear precedent.** The whole point of the subagent analysis is to minimize these.
 
@@ -334,10 +370,11 @@ After presenting assumptions, ask the user for corrections.
 Use AskUserQuestion (multiSelect: true):
 - header: "Corrections"
 - question: "Which assumptions need correction? Select any that are wrong or missing context."
-- options: Generate 3-4 options based on the assumption groups that had `Likely` or `Unclear` items. Each option MUST state the actual assumption, not just the area name:
-  - "[Area]: [what Claude assumed]" — e.g. "Data Model: extend existing PostType with new fields"
-  - "[Area]: [what Claude assumed]" — e.g. "Navigation: add tab to existing bottom nav bar"
-  - "[Area]: [what Claude assumed]" — e.g. "State: use existing Redux store pattern"
+- options: Generate 3-4 options based on the assumption groups that had `Likely` or `Unclear` items. Each option MUST include the assumption AND its consequence — not just the area name:
+  - "[Area]: [what Claude assumed] → [what this means in practice]"
+  - e.g. "Data Model: add favorites to user profiles → each user gets a favorites list stored alongside their profile data"
+  - e.g. "Navigation: new tab in bottom bar → the main navigation grows from 4 to 5 tabs"
+  - e.g. "Layout: card grid like existing posts → same visual style as the posts feed, 2 columns"
   - "All good" — Assumptions are accurate, proceed to write context
 
 **If user selects "All good":**
@@ -347,9 +384,11 @@ Continue to write_context.
 **If user selects areas to correct:**
 For each selected area, ask ONE focused AskUserQuestion:
 - header: "[Area]" (max 12 chars)
-- question: State what Claude assumed, then ask what's right. Format: "I assumed [X]. What should it be instead?"
-- options: 2-3 concrete alternatives. Mark your recommended option with "(Recommended)" suffix. AskUserQuestion adds "Other" automatically.
-  Example: ["Use existing UserProfile table", "New dedicated table (Recommended)", "External service / API"]
+- question: Include THREE things: (1) What you assumed, (2) WHY you assumed it (brief — reference codebase context), (3) What you need from the user. Format: "I assumed [X] because [brief reason from codebase]. What should it be instead?"
+  - Example: "I assumed we'd extend the existing user_profiles table (which already stores name, email, avatar) because it avoids a new table. Should we store favorites there, or somewhere separate?"
+- options: 2-3 concrete alternatives. Each option should describe the USER-VISIBLE outcome, not just the technical mechanism. Mark your recommended option with "(Recommended)" suffix. AskUserQuestion adds "Other" automatically.
+  - Example: ["Add to user profiles — simpler, favorites load with profile (Recommended)", "Separate favorites storage — more flexible if favorites get complex later", "Don't store — compute from activity history"]
+  - BAD example: ["Use existing UserProfile table", "New dedicated table", "External service"] — these are meaningless without context
 
 After all corrections gathered, summarize:
 ```
@@ -707,8 +746,10 @@ Route to `confirm_creation` step (existing behavior — show manual next steps).
 - Config checked for discuss_mode
 - **If assumptions mode:**
   - Codebase thoroughly analyzed (5-15 relevant files read)
-  - Assumptions surfaced with codebase evidence
+  - Every assumption includes plain-language "why this way" and "if wrong" context
+  - Assumptions presented for someone who didn't write the code — no orphan technical references
   - Only genuinely unclear items flagged for user input
+  - Correction questions include codebase context and user-visible consequences
   - User corrections captured
 - **If discuss mode:**
   - Gray areas identified through intelligent analysis (not generic questions)

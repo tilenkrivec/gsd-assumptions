@@ -25,8 +25,8 @@ Extract implementation decisions that downstream agents need — researcher and 
 
 **"assumptions":**
 1. Spawn Explore subagent to deeply analyze the codebase for this phase
-2. Surface assumptions with evidence (file citations, patterns found)
-3. Ask user which assumptions are wrong — correct only those
+2. Surface assumptions with impact context (why this way, what changes if wrong — in plain language)
+3. Ask user which assumptions are wrong — each correction question includes context and consequences
 4. Create CONTEXT.md with confirmed assumptions + corrections
 
 **Output:** `{phase_num}-CONTEXT.md` — decisions clear enough that downstream agents can act without asking the user again
@@ -80,7 +80,7 @@ Phase number: $ARGUMENTS (required)
 
 <success_criteria>
 - Config checked for discuss_mode
-- If assumptions mode: codebase analyzed via subagent, assumptions surfaced with evidence, corrections captured
+- If assumptions mode: codebase analyzed via subagent, assumptions surfaced with plain-language impact context (why this way + what changes if wrong), corrections captured with consequence-aware questions
 - If discuss mode: gray areas identified, user chose which to discuss, each area explored
 - Scope creep redirected to deferred ideas
 - CONTEXT.md captures decisions, not vague vision
