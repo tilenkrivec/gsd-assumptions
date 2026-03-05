@@ -4,7 +4,7 @@ Extract implementation decisions that downstream agents need.
 Two modes controlled by `workflow.discuss_mode` config:
 
 - **"discuss" (default):** Identify gray areas, let user choose what to discuss, deep-dive each area with questions until satisfied.
-- **"assumptions":** Read codebase deeply first, surface assumptions with evidence, ask user only to correct what's wrong.
+- **"assumptions":** Read codebase deeply first, research external APIs/libraries when the codebase can't answer, surface assumptions with evidence, ask user only to correct what's wrong.
 
 Both modes produce identical CONTEXT.md output for downstream agents.
 
@@ -195,7 +195,7 @@ DISCUSS_MODE=$(node /Users/tilenkrivec/.claude/get-shit-done/bin/gsd-tools.cjs c
 <step name="deep_codebase_analysis">
 **This step is the core difference from the default discuss flow.**
 
-Before surfacing any assumptions, thoroughly analyze the codebase. **This runs as a subagent to protect the main context window from file contents.**
+Before surfacing any assumptions, thoroughly analyze the codebase AND gather external documentation for areas the codebase can't answer. **Codebase analysis runs as a subagent to protect the main context window from file contents.**
 
 Display:
 ```
@@ -210,6 +210,20 @@ Display:
 
 Read the phase description from ROADMAP.md and the specific requirements from REQUIREMENTS.md. These are small and needed to construct the subagent prompt.
 
+### Check for existing project research and prior phase outputs
+
+Before spawning the Explore subagent, check what existing research is available:
+
+```bash
+# List project-level research files
+ls .planning/research/*.md 2>/dev/null
+
+# List prior phase CONTEXT.md and RESEARCH.md files
+ls .planning/phases/*/*.md 2>/dev/null | grep -E '(CONTEXT|RESEARCH)\.md$'
+```
+
+Collect the paths of any existing files. These will be passed to the Explore subagent so it can read them for additional context. **Do NOT read these files in the main context** — let the subagent handle it.
+
 ### Spawn Explore subagent for deep analysis
 
 ```
@@ -218,6 +232,7 @@ Task(
 
 <objective>
 Find existing patterns, conventions, components, and architecture relevant to this phase.
+Also check project research documents for prior decisions and technical context.
 Return a structured summary — NOT raw file contents.
 </objective>
 
@@ -227,22 +242,43 @@ Return a structured summary — NOT raw file contents.
 **Requirements:** {relevant requirements from REQUIREMENTS.md}
 </phase_context>
 
+<existing_research>
+{List paths of existing research files found above, or 'None found' if empty.}
+
+If files exist, read them FIRST — they contain stack decisions, architecture patterns, and pitfalls already researched during project setup. Prior phase CONTEXT.md files contain locked user decisions that may constrain this phase. Prior RESEARCH.md files contain verified technical findings.
+</existing_research>
+
 <analysis_steps>
-1. **Identify related areas** using Glob and Grep:
+1. **Read existing project research** (if any files listed above):
+   - `.planning/research/STACK.md` — technology decisions already made
+   - `.planning/research/ARCHITECTURE.md` — architectural patterns chosen
+   - `.planning/research/PITFALLS.md` — known gotchas
+   - `.planning/research/SUMMARY.md` — executive summary of all research
+   - Prior phase CONTEXT.md/RESEARCH.md — decisions and findings from related phases
+   - Extract anything relevant to THIS phase's domain
+
+2. **Identify related areas** using Glob and Grep:
    - Files related to the phase domain (components, routes, APIs, utilities)
    - Similar features already built (how does the app handle comparable things?)
    - Adjacent code this phase will connect to (imports, consumers)
    - Configuration patterns (how are similar things configured?)
    - UI patterns (if UI-related: component libraries, layouts, styles)
 
-2. **Read the most relevant files** (aim for 5-15 depending on complexity):
+3. **Read the most relevant files** (aim for 5-15 depending on complexity):
    - Existing components in the same domain
    - Route structure and layout patterns
    - GraphQL queries/mutations for related data
    - Type definitions and interfaces
    - Any prior phase outputs that feed into this phase
 
-3. **Synthesize findings** — organize into this exact output format:
+4. **Identify knowledge gaps** — areas where neither the codebase NOR existing research provides enough information:
+   - External API integrations (APIs not already used in the codebase)
+   - New libraries or frameworks not yet in the project
+   - Third-party service configurations
+   - Technical domains where the codebase has no precedent
+   - **Be explicit about what you DON'T know** — this triggers targeted research
+
+5. **Synthesize findings** — organize into this exact output format:
 </analysis_steps>
 
 <required_output_format>
@@ -252,6 +288,11 @@ Return your analysis in this EXACT structure:
 - [Pattern/convention] — found in [file path(s)]
 - [Pattern/convention] — found in [file path(s)]
 (list all relevant patterns discovered)
+
+## Prior Research Findings
+(If project research files exist, summarize relevant findings here. If none exist, write 'No prior research found.')
+- [Relevant finding] — from [research file path]
+- [Relevant finding] — from [research file path]
 
 ## Assumptions by Area
 
@@ -289,6 +330,17 @@ For each item, use this format:)
   - What the user will notice: [Plain-language description of how each option affects the end result — the visible/behavioral difference, not the technical mechanism]
   - Leaning toward: [your recommended approach] — because [reasoning in plain language]
   - Alternative: [other valid approach] — [when you'd pick this instead, described in terms of user-facing outcome]
+
+## Needs External Research
+(List areas where the codebase and existing research DON'T have enough information to make confident assumptions. This section triggers a targeted research step with access to web search and documentation tools.
+
+If the codebase covers everything needed, write 'None — codebase provides sufficient context.'
+
+For each item that needs research:)
+- **[Topic]:** [What needs to be looked up — be specific]
+  - Why: [What's missing — "No existing usage of X API in the codebase", "Library Y is in package.json but no integration patterns exist", etc.]
+  - Research queries: [Specific things to look up — e.g. "Google Gemini API Node.js SDK authentication", "Stripe webhook signature verification in Next.js"]
+  - Affects assumptions: [Which assumption area(s) this would improve]
 </required_output_format>
 
 <quality_bar>
@@ -301,6 +353,7 @@ For each item, use this format:)
   - 'If wrong' must describe concrete implementation changes, not vague "it would be different." What files change? What gets created/modified? What behavior shifts?
   - The user is a visionary, not a codebase archaeologist. They need enough context to evaluate whether your assumption matches their intent.
 - Avoid jargon-heavy assumptions. "Extend the Prisma schema with a new relation" means nothing — say "Add a 'favorites' list to each user's data, connected to existing posts."
+- CRITICAL — Be honest about knowledge gaps. If the phase involves an external API or library you haven't seen in the codebase, DO NOT fabricate how it works. Flag it in 'Needs External Research' so it gets properly looked up. Making up API details is worse than admitting you don't know.
 </quality_bar>",
   subagent_type="Explore",
   description="Analyze codebase for Phase {phase}"
@@ -313,11 +366,125 @@ Store the returned analysis as `CODEBASE_ANALYSIS`. This is a structured summary
 
 Display: `◆ Codebase analysis complete.`
 
-Continue to surface_assumptions, passing `CODEBASE_ANALYSIS`.
+Continue to targeted_research.
+</step>
+
+<step name="targeted_research">
+**Conditional step — only fires when external research is needed.**
+
+Parse `CODEBASE_ANALYSIS` for the `## Needs External Research` section.
+
+**If the section says "None" or is empty:** Skip this step entirely. Display: `◆ No external research needed.` Continue to surface_assumptions.
+
+**If research items exist:**
+
+Display:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► RESEARCHING EXTERNAL DEPENDENCIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+◆ Looking up documentation for areas the codebase doesn't cover...
+```
+
+### Spawn research subagent
+
+```
+Task(
+  prompt="Research specific technical topics for Phase {phase_number}: {phase_name}.
+
+<objective>
+The codebase analysis identified areas that need external documentation lookup. Research ONLY the items listed below — this is targeted research, not broad exploration. Return findings that can be merged into the existing assumption analysis.
+</objective>
+
+<phase_context>
+**Phase goal:** {goal from ROADMAP.md}
+**Phase description:** {section from ROADMAP.md}
+</phase_context>
+
+<research_items>
+{Copy the '## Needs External Research' section from CODEBASE_ANALYSIS verbatim}
+</research_items>
+
+<research_protocol>
+**Source priority — follow this order:**
+
+1. **Context7 (highest trust):** For any library/framework mentioned in the research items:
+   - First resolve the library: mcp__context7__resolve-library-id with the library name
+   - Then query docs: mcp__context7__query-docs with the resolved ID and a specific query
+   - This gives you CURRENT, VERIFIED documentation — far better than training data
+
+2. **WebFetch (high trust):** For official documentation pages:
+   - Fetch official docs, READMEs, API references
+   - Only use known-authoritative URLs (official docs domains)
+
+3. **WebSearch (needs verification):** For ecosystem patterns and community practices:
+   - Always include the current year in queries
+   - Use multiple query variations
+   - Cross-verify with official sources where possible
+
+**Confidence levels for findings:**
+- HIGH: Verified through Context7 or official docs
+- MEDIUM: WebSearch finding confirmed by a second source
+- LOW: Single WebSearch source, flag for validation
+
+**CRITICAL: Be prescriptive.** 'Use X with this pattern' not 'Consider X or Y.'
+If you find that something works differently than might be expected, be explicit about it.
+</research_protocol>
+
+<required_output_format>
+Return your findings in this EXACT structure:
+
+## Research Findings
+
+### [Topic 1 from research items]
+- **Finding:** [What you discovered — concrete, actionable]
+- **Key details:** [API patterns, configuration requirements, important constraints, version-specific notes]
+- **Code pattern:** [If applicable — a brief verified code example showing the correct way to use this]
+- **Confidence:** [HIGH/MEDIUM/LOW]
+- **Source:** [Context7 library ID, doc URL, or search query that found it]
+- **Affects assumptions:** [Which assumption area(s) this informs]
+
+### [Topic 2 from research items]
+- **Finding:** [What you discovered]
+- **Key details:** [Important specifics]
+- **Code pattern:** [If applicable]
+- **Confidence:** [HIGH/MEDIUM/LOW]
+- **Source:** [Attribution]
+- **Affects assumptions:** [Which areas this informs]
+
+## Research Summary
+[2-3 sentences: What was learned, what confidence level overall, any remaining gaps]
+</required_output_format>",
+  subagent_type="general-purpose",
+  description="Research external deps for Phase {phase}"
+)
+```
+
+### Handle research subagent return
+
+Store the returned findings as `RESEARCH_FINDINGS`.
+
+### Merge research into analysis
+
+Update `CODEBASE_ANALYSIS` with research findings:
+
+1. For each research finding that `Affects assumptions` — enrich the corresponding assumption area:
+   - Update the assumption's `Why this way` with research-backed evidence
+   - Upgrade confidence from `Unclear` to `Likely` or `Confident` where research resolved ambiguity
+   - Add `**Source:**` field with attribution (e.g. "Context7: @google/generative-ai", "Official docs: developers.google.com")
+
+2. Move items from `Genuinely Unclear` to `Assumptions by Area` if research provided a clear answer
+
+3. Append a `## External Research` section to `CODEBASE_ANALYSIS` with the raw findings for downstream use
+
+Display: `◆ Research complete. {N} areas enriched with external documentation.`
+
+Continue to surface_assumptions.
 </step>
 
 <step name="surface_assumptions">
-Present the subagent's analysis (`CODEBASE_ANALYSIS`) to the user in a scannable format. Do NOT re-read files — the analysis is already done.
+Present the analysis (`CODEBASE_ANALYSIS`, enriched with `RESEARCH_FINDINGS` if any) to the user in a scannable format. Do NOT re-read files — the analysis is already done.
 
 Display:
 
@@ -331,7 +498,7 @@ Phase boundary: [What this phase delivers — from ROADMAP.md]
 
 **Present the CODEBASE_ANALYSIS to the user, but reformat for scannability:**
 
-1. **Skip "Codebase Patterns Found"** — don't dump raw pattern lists. The patterns are already woven into each assumption's "Why this way" field.
+1. **Skip "Codebase Patterns Found" and "Prior Research Findings"** — don't dump raw pattern lists. The patterns are already woven into each assumption's "Why this way" field.
 
 2. **For each assumption area, present as a clear block:**
    ```
@@ -341,6 +508,11 @@ Phase boundary: [What this phase delivers — from ROADMAP.md]
    **Because:** [why — referencing what exists in the codebase, explained for someone who didn't write it]
    **If that's wrong:** [what changes — concrete consequences]
    **Confidence:** [level]
+   ```
+
+   If the assumption was enriched by external research, add a source line:
+   ```
+   **Source:** [e.g. "Verified via Google Gemini API docs", "Context7: @google/generative-ai"]
    ```
 
 3. **For "Genuinely Unclear" items**, present as open questions with your recommendation:
@@ -358,8 +530,9 @@ Phase boundary: [What this phase delivers — from ROADMAP.md]
 - Write for someone who hasn't looked at the code in weeks (or ever). Don't assume they remember what tables, components, or patterns exist.
 - Lead with the USER-VISIBLE consequence, not the technical mechanism. "Posts will appear in a scrollable list like the existing feed" not "Reuse the FlatList component from PostFeed.tsx".
 - When referencing something Claude built in a previous phase, say so: "The auth system (built in Phase 2) already stores..." — this explains WHY something exists.
+- When an assumption is backed by external documentation (not just codebase), mention this briefly — it signals that the recommendation is verified, not guessed. e.g. "Based on the current Gemini API docs, the SDK handles..." rather than "I'll use the Gemini API to..."
 
-**Only flag items as "Unclear" when the codebase genuinely has no clear precedent.** The whole point of the subagent analysis is to minimize these.
+**Only flag items as "Unclear" when the codebase AND external research genuinely have no clear answer.** The whole point of the analysis + research is to minimize these.
 
 Continue to gather_corrections.
 </step>
@@ -598,6 +771,17 @@ mkdir -p ".planning/phases/${padded_phase}-${phase_slug}"
 
 [If discuss mode: omit this section]
 
+## External Research Findings (assumptions mode only)
+
+[If assumptions mode AND targeted research was performed: include verified findings from external documentation. This passes documentation evidence to downstream agents so the phase-researcher doesn't need to re-lookup the same APIs/libraries.
+
+For each researched topic:
+- **[Topic]:** [Key finding — concrete, actionable]
+- **Source:** [Context7 library, official docs URL, etc.]
+- **Confidence:** [HIGH/MEDIUM/LOW]
+
+If no external research was performed, omit this section.]
+
 </codebase_evidence>
 
 <specifics>
@@ -745,12 +929,17 @@ Route to `confirm_creation` step (existing behavior — show manual next steps).
 - Phase validated against roadmap
 - Config checked for discuss_mode
 - **If assumptions mode:**
+  - Existing project research files checked and incorporated
   - Codebase thoroughly analyzed (5-15 relevant files read)
+  - Knowledge gaps honestly identified — not fabricated
+  - External research performed for areas the codebase can't answer (APIs, new libraries, etc.)
   - Every assumption includes plain-language "why this way" and "if wrong" context
+  - Research-backed assumptions include source attribution
   - Assumptions presented for someone who didn't write the code — no orphan technical references
-  - Only genuinely unclear items flagged for user input
+  - Only genuinely unclear items flagged for user input (after both codebase analysis AND external research)
   - Correction questions include codebase context and user-visible consequences
   - User corrections captured
+  - External research findings passed to downstream agents in CONTEXT.md
 - **If discuss mode:**
   - Gray areas identified through intelligent analysis (not generic questions)
   - User selected which areas to discuss

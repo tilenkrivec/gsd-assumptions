@@ -24,10 +24,11 @@ Extract implementation decisions that downstream agents need — researcher and 
 4. Create CONTEXT.md with decisions
 
 **"assumptions":**
-1. Spawn Explore subagent to deeply analyze the codebase for this phase
-2. Surface assumptions with impact context (why this way, what changes if wrong — in plain language)
-3. Ask user which assumptions are wrong — each correction question includes context and consequences
-4. Create CONTEXT.md with confirmed assumptions + corrections
+1. Spawn Explore subagent to deeply analyze the codebase + existing project research for this phase
+2. If external APIs/libraries need documentation lookup, spawn targeted research subagent (Context7, WebSearch, WebFetch)
+3. Surface assumptions with impact context (why this way, what changes if wrong — in plain language, with source attribution for research-backed items)
+4. Ask user which assumptions are wrong — each correction question includes context and consequences
+5. Create CONTEXT.md with confirmed assumptions + corrections + research findings for downstream agents
 
 **Output:** `{phase_num}-CONTEXT.md` — decisions clear enough that downstream agents can act without asking the user again
 </objective>
@@ -53,11 +54,14 @@ Phase number: $ARGUMENTS (required)
 3. **Check config** — read `workflow.discuss_mode` to determine mode
 4. **If "assumptions" mode:**
    - Read ROADMAP.md + REQUIREMENTS.md (small reads, main context)
-   - Spawn Explore subagent for deep codebase analysis (protects main context)
-   - Present structured assumptions to user
+   - Check for existing project research files + prior phase outputs
+   - Spawn Explore subagent for deep codebase analysis (reads codebase + existing research, flags knowledge gaps)
+   - If knowledge gaps exist (external APIs, new libraries): spawn targeted research subagent (Context7/WebSearch/WebFetch)
+   - Merge research findings into analysis
+   - Present structured assumptions to user (with source attribution for research-backed items)
    - Ask which assumptions need correction (multiSelect)
    - For each correction: one focused question
-   - Write CONTEXT.md with confirmed assumptions + corrections
+   - Write CONTEXT.md with confirmed assumptions + corrections + research findings
 5. **If "discuss" mode:**
    - Analyze phase — identify domain and phase-specific gray areas
    - Present gray areas — multi-select: which to discuss?
@@ -80,7 +84,7 @@ Phase number: $ARGUMENTS (required)
 
 <success_criteria>
 - Config checked for discuss_mode
-- If assumptions mode: codebase analyzed via subagent, assumptions surfaced with plain-language impact context (why this way + what changes if wrong), corrections captured with consequence-aware questions
+- If assumptions mode: codebase + existing research analyzed via subagent, external documentation looked up for knowledge gaps, assumptions surfaced with plain-language impact context (why this way + what changes if wrong + source attribution), corrections captured with consequence-aware questions
 - If discuss mode: gray areas identified, user chose which to discuss, each area explored
 - Scope creep redirected to deferred ideas
 - CONTEXT.md captures decisions, not vague vision
