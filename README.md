@@ -14,9 +14,10 @@ A config-driven `"assumptions"` mode that flips the workflow:
 |------------------------|--------------------------|
 | Identifies gray areas, asks 4 questions per area | Spawns subagent to read codebase deeply, surfaces assumptions with evidence |
 | User answers ~15-20 questions | User reviews assumptions, corrects what's wrong (~2-4 interactions) |
-| Reads roadmap description only | Reads related files, patterns, adjacent code (5-15 files) |
+| Reads roadmap description only | Reads related files, patterns, adjacent code (5-15 files) + existing project research |
+| No external lookups | Targeted external research for APIs/libraries the codebase can't answer (Context7, WebSearch, WebFetch) |
 | All work in main context | Codebase analysis runs as Explore subagent (protects main context) |
-| Same CONTEXT.md output | Same CONTEXT.md output |
+| Same CONTEXT.md output | Same CONTEXT.md output (+ external research findings for downstream agents) |
 
 ## How It Works
 
@@ -25,15 +26,21 @@ A config-driven `"assumptions"` mode that flips the workflow:
 ```
 /gsd:discuss-phase 80 --auto
   |
-  |-- [main context]    Init, validate phase, detect mode
-  |-- [main context]    Read ROADMAP + REQUIREMENTS (small reads)
+  |-- [main context]     Init, validate phase, detect mode
+  |-- [main context]     Read ROADMAP + REQUIREMENTS (small reads)
+  |-- [main context]     Check for existing project research + prior phase outputs
   |
-  |-- [Explore subagent] Deep codebase analysis
-  |   Returns structured summary only (no raw files in main context)
+  |-- [Explore subagent]  Deep codebase analysis + read existing research
+  |   Returns structured summary + flags knowledge gaps
   |
-  |-- [main context]    Present assumptions to user
-  |-- [main context]    User corrections (AskUserQuestion)
-  |-- [main context]    Write CONTEXT.md + git commit
+  |-- [general-purpose subagent] Targeted external research (conditional)
+  |   Only fires when Explore flags gaps (external APIs, new libraries)
+  |   Uses Context7, WebFetch, WebSearch — follows GSD source hierarchy
+  |   Returns findings merged into assumptions
+  |
+  |-- [main context]     Present assumptions to user (with source attribution)
+  |-- [main context]     User corrections (AskUserQuestion)
+  |-- [main context]     Write CONTEXT.md + git commit
   |
   +-- AUTO-ADVANCE
       +-- [Task subagent] plan-phase --auto
@@ -62,21 +69,24 @@ Set to `"discuss"` (or omit) to use the original interview flow.
 ### What the user sees
 
 1. Banner: "ANALYZING CODEBASE FOR PHASE X"
-2. Subagent reads 5-15 relevant files, returns structured summary
-3. Banner: "PHASE X: NAME - ASSUMPTIONS" with:
-   - Codebase patterns found (with file citations)
+2. Explore subagent reads 5-15 relevant files + existing project research, returns structured summary
+3. If knowledge gaps found — Banner: "RESEARCHING EXTERNAL DEPENDENCIES"
+   - Research subagent looks up external APIs/libraries via Context7, WebSearch, WebFetch
+   - Findings merged into assumptions with source attribution
+4. Banner: "PHASE X: NAME - ASSUMPTIONS" with:
    - Assumptions grouped by area (Confident / Likely / Unclear)
+   - Source attribution for research-backed items
    - Scope boundaries
-4. MultiSelect: "Which assumptions need correction?"
-5. One focused question per correction area
-6. CONTEXT.md written (same format as default discuss-phase)
-7. Next steps shown (or auto-advance to plan/execute)
+5. MultiSelect: "Which assumptions need correction?"
+6. One focused question per correction area
+7. CONTEXT.md written (same format as default discuss-phase, plus external research findings)
+8. Next steps shown (or auto-advance to plan/execute)
 
 ## Files Modified
 
 | File | What changed |
 |------|-------------|
-| `workflows/discuss-phase.md` | Added assumptions mode branch after `detect_mode` step. Spawns Explore subagent for codebase analysis. Original discuss flow preserved when config is `"discuss"`. |
+| `workflows/discuss-phase.md` | Added assumptions mode branch after `detect_mode` step. Spawns Explore subagent for codebase analysis (reads existing project research + prior phase outputs). Adds conditional targeted research step for external APIs/libraries via Context7/WebSearch/WebFetch. Original discuss flow preserved when config is `"discuss"`. |
 | `workflows/plan-phase.md` | Step 4 checks config — shows "Gather context (assumptions mode)" instead of "Run discuss-phase first" when appropriate. |
 | `workflows/progress.md` | Routes B and C check config — show correct description and `--auto` hint for assumptions mode. |
 | `commands/gsd/discuss-phase.md` | Updated command description to document both modes. |
