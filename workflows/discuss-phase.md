@@ -534,6 +534,75 @@ Phase boundary: [What this phase delivers — from ROADMAP.md]
 
 **Only flag items as "Unclear" when the codebase AND external research genuinely have no clear answer.** The whole point of the analysis + research is to minimize these.
 
+Continue to assess_confidence.
+</step>
+
+<step name="assess_confidence">
+**Decision gate: determine whether user questioning is needed.**
+
+Evaluate the assumptions from `CODEBASE_ANALYSIS`:
+
+1. **Count confidence levels** across all assumption areas:
+   - How many `Confident` assumptions?
+   - How many `Likely` assumptions?
+   - How many `Unclear` assumptions?
+
+2. **Check "Genuinely Unclear Items"** — are there any items that require user input?
+
+3. **Decide:**
+
+**SKIP questioning if ALL of these are true:**
+- Zero `Unclear` assumptions
+- Zero "Genuinely Unclear Items"
+- All or nearly all assumptions are `Confident` (a few `Likely` with strong evidence is fine)
+- No ambiguous scope boundaries
+
+**REQUIRE questioning** if ANY of these are true:
+- Any `Unclear` assumptions exist
+- Any "Genuinely Unclear Items" exist
+- Multiple `Likely` assumptions with weak evidence
+- Ambiguous scope boundaries that could change implementation direction
+
+---
+
+**If SKIPPING questioning:**
+
+Display a clear decision banner so the user sees exactly what happened:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► DECISION: PROCEEDING WITHOUT QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All assumptions are backed by codebase evidence. No ambiguity
+requires your input.
+
+**Confidence breakdown:**
+- {N} Confident — clear codebase precedent
+- {N} Likely — strong evidence, reasonable inference
+- 0 Unclear
+
+**Key decisions being locked in:**
+- [Area 1]: [1-line summary of the assumption]
+- [Area 2]: [1-line summary of the assumption]
+- [Area 3]: [1-line summary of the assumption]
+...
+
+**Why no questions:** [1-2 sentences explaining what made this
+clear-cut. e.g. "The codebase already has established patterns
+for all aspects of this phase — data models, UI components, and
+API structure all have direct precedents to follow."]
+
+If any of these are wrong, you can re-run with:
+  /gsd:discuss-phase {PHASE}
+```
+
+Continue to write_context.
+
+---
+
+**If REQUIRING questioning:**
+
 Continue to gather_corrections.
 </step>
 
@@ -741,6 +810,7 @@ mkdir -p ".planning/phases/${padded_phase}-${phase_slug}"
 **Gathered:** [date]
 **Status:** Ready for planning
 **Mode:** [discuss | assumptions]
+**User input:** [questioned | skipped — {reason}]
 
 <domain>
 ## Phase Boundary
@@ -937,8 +1007,10 @@ Route to `confirm_creation` step (existing behavior — show manual next steps).
   - Research-backed assumptions include source attribution
   - Assumptions presented for someone who didn't write the code — no orphan technical references
   - Only genuinely unclear items flagged for user input (after both codebase analysis AND external research)
-  - Correction questions include codebase context and user-visible consequences
-  - User corrections captured
+  - **Confidence assessed transparently** — if all assumptions are confident and no unclear items exist, questioning is skipped with a visible decision banner showing: confidence breakdown, key decisions being locked in, and why no questions were needed
+  - If questioning needed: correction questions include codebase context and user-visible consequences
+  - User corrections captured (or skip rationale displayed if questions were not needed)
+  - CONTEXT.md records whether user was questioned or skipped (and why)
   - External research findings passed to downstream agents in CONTEXT.md
 - **If discuss mode:**
   - Gray areas identified through intelligent analysis (not generic questions)

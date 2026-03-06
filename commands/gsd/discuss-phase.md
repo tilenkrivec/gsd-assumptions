@@ -84,7 +84,7 @@ Phase number: $ARGUMENTS (required)
 
 <success_criteria>
 - Config checked for discuss_mode
-- If assumptions mode: codebase + existing research analyzed via subagent, external documentation looked up for knowledge gaps, assumptions surfaced with plain-language impact context (why this way + what changes if wrong + source attribution), corrections captured with consequence-aware questions
+- If assumptions mode: codebase + existing research analyzed via subagent, external documentation looked up for knowledge gaps, assumptions surfaced with plain-language impact context (why this way + what changes if wrong + source attribution), confidence assessed transparently (skip questioning with visible decision banner if all confident, otherwise gather corrections with consequence-aware questions)
 - If discuss mode: gray areas identified, user chose which to discuss, each area explored
 - Scope creep redirected to deferred ideas
 - CONTEXT.md captures decisions, not vague vision
